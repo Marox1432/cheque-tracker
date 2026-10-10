@@ -1,0 +1,13 @@
+{
+  "name": "cheque-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cheque Tracker app and daily debit alerts",
+  "scripts": {
+    "alerts": "node send-alerts.mjs"
+  },
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

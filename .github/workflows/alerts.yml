@@ -1,0 +1,34 @@
+# Cheque alerts workflow (runs daily at 08:55 Dubai time)
+name: Cheque alerts
+
+on:
+  schedule:
+    - cron: '55 4 * * *'   # 04:55 UTC = 08:55 in Dubai, every day
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Send a test notification instead of the real alerts'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Send alerts
+        run: node send-alerts.mjs
+        env:
+          SHEET_CSV_URL: ${{ secrets.SHEET_CSV_URL }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          PUSH_SUBSCRIPTIONS: ${{ secrets.PUSH_SUBSCRIPTIONS }}
+          TEST_ONLY: ${{ github.event.inputs.test }}
