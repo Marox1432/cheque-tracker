@@ -463,7 +463,7 @@ function renderList(all){
 
 /* ---------- events ---------- */
 var toastT;
-function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},2200)}
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},4500)}
 function copyText(s){
   function fallback(){var a=document.createElement('textarea');a.value=s;a.style.cssText='position:fixed;opacity:0';document.body.appendChild(a);a.select();var ok=false;try{ok=document.execCommand('copy')}catch(e){}document.body.removeChild(a);toast(ok?'Copied':'Select and copy manually')}
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(s).then(function(){toast('Copied')},fallback)}else fallback();
@@ -558,7 +558,7 @@ function subscribe(){
   Notification.requestPermission().then(function(p){
     pushStatus();
     if(p!=='granted')throw new Error('denied');
-    return navigator.serviceWorker.ready;
+    return swReady();
   }).then(function(reg){
     return reg.pushManager.getSubscription().then(function(old){return old?old.unsubscribe():true}).then(function(){
       return reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToBytes(pub)});
@@ -566,15 +566,26 @@ function subscribe(){
   }).then(function(sub){
     $('subout').hidden=false;$('subtext').value=JSON.stringify(sub.toJSON());
     toast('Notifications on. Copy the line below into GitHub.');
-  }).catch(function(e){if(!e||e.message!=='denied')toast('Could not turn on notifications on this device')});
+  }).catch(function(e){
+    if(e&&e.message==='denied')toast('Notifications are blocked. Allow them in Settings, Notifications, Cheques');
+    else if(e&&e.message==='sw-timeout')toast('The app is still starting. Close it fully, open it again and retry');
+    else toast('Could not turn on notifications on this device');
+  });
+}
+function swReady(){
+  return Promise.race([navigator.serviceWorker.ready,new Promise(function(_,rej){setTimeout(function(){rej(new Error('sw-timeout'))},6000)})]);
 }
 function testNote(){
-  if(!pushSupported()){pushStatus();return}
+  if(!pushSupported()){pushStatus();toast('Open the app from its Home Screen icon, not from Safari');return}
+  toast('Checking notifications...');
   Notification.requestPermission().then(function(p){
-    pushStatus();if(p!=='granted')return;
-    return navigator.serviceWorker.ready.then(function(reg){
+    pushStatus();
+    if(p!=='granted'){toast(p==='denied'?'Notifications are blocked. Allow them in Settings, Notifications, Cheques':'Notifications were not allowed');return}
+    return swReady().then(function(reg){
       return reg.showNotification('Cheque Tracker',{body:'This is a test. Alerts will look like this.',icon:'icon-192.png',tag:'test'});
-    });
+    }).then(function(){toast('Test sent. Look at the top of the screen or the lock screen.')});
+  }).catch(function(e){
+    toast(e&&e.message==='sw-timeout'?'The app is still starting. Close it fully, open it again and retry':'Could not show a notification on this device');
   });
 }
 document.addEventListener('click',function(e){
