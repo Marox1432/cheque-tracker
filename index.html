@@ -161,6 +161,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .detail{padding:4px 14px 16px calc(14px + 3rem + 12px);display:grid;gap:8px;font-size:.86rem}
 .detail p{margin:0}
 .detail .k{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.btn.danger{color:var(--stamp);border-color:var(--stamp)}
 .detail .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 @media (max-width:480px){.detail{padding-left:14px}.row-main{grid-template-columns:2.6rem minmax(0,1fr) auto;gap:10px;padding-inline:10px}}
 .none{padding:22px;color:var(--muted);text-align:center}
@@ -326,7 +327,7 @@ dialog form{display:grid;gap:16px;padding:20px 20px 18px}
     <div class="dlg-head">
       <div>
         <h2 id="addTitle">Add a cheque</h2>
-        <p>It is saved to your Cheque Tracker sheet and gets its alerts automatically.</p>
+        <p id="addSub">It is saved to your Cheque Tracker sheet and gets its alerts automatically.</p>
       </div>
       <button type="button" class="dlg-x" data-act="addcancel" aria-label="Close">&times;</button>
     </div>
@@ -347,6 +348,15 @@ dialog form{display:grid;gap:16px;padding:20px 20px 18px}
       <button type="button" class="btn" data-act="addcancel">Cancel</button>
       <button type="submit" class="btn primary" id="addSave">Add cheque</button>
     </div>
+  </form>
+</dialog>
+<dialog id="confDlg" aria-labelledby="confTitle">
+  <form id="confForm" novalidate>
+    <div class="dlg-head"><div><h2 id="confTitle"></h2><p id="confText"></p></div>
+      <button type="button" class="dlg-x" data-act="confno" aria-label="Close">&times;</button></div>
+    <p class="dlg-err" id="confErr" role="alert"></p>
+    <div class="dlg-foot"><button type="button" class="btn" data-act="confno">Keep it</button>
+      <button type="submit" class="btn primary" id="confYes"></button></div>
   </form>
 </dialog>
 <div class="live-msg" id="toast" role="status" hidden></div>
@@ -372,7 +382,7 @@ try{state.bal=localStorage.getItem('cheque-balance')||''}catch(e){}
 function build(raw){
   var rows=raw.map(function(r){
     var day=isoToDay(r[1]);
-    return {key:r[0]+'-'+r[1],no:r[0],iso:r[1],day:day,payee:r[2],amount:r[3],cancelled:/cancel/i.test(r[4]||'')};
+    return {key:r[0]+'-'+r[1],no:r[0],iso:r[1],day:day,payee:r[2],amount:r[3],remarks:r[4]||'',cancelled:/cancel/i.test(r[4]||'')};
   });
   rows.sort(function(a,b){return a.day-b.day||(+a.no)-(+b.no)});
   return rows;
@@ -489,7 +499,11 @@ function renderMonths(live){
 }
 function statusLabel(r){return r.st==='today'?'Due today':r.st==='soon'?'In '+r.d+(r.d===1?' day':' days'):r.st==='upcoming'?'Upcoming':r.st==='debited'?'Debited':'Cancelled'}
 function detailHTML(r){
-  if(r.cancelled)return '<div class="detail"><p>This cheque is marked Cancelled in the sheet, so it gets no alerts and is left out of every total.</p></div>';
+  var k=esc(r.key);
+  var fix='<button class="btn" data-act="editrow" data-key="'+k+'">Edit</button>'+
+    (r.cancelled?'<button class="btn" data-act="restorerow" data-key="'+k+'">Restore cheque</button>':'<button class="btn" data-act="cancelrow" data-key="'+k+'">Cancel cheque</button>')+
+    '<button class="btn danger" data-act="delrow" data-key="'+k+'">Delete</button>';
+  if(r.cancelled)return '<div class="detail"><p>This cheque is marked Cancelled in the sheet, so it gets no alerts and is left out of every total.</p><div class="acts">'+fix+'</div></div>';
   var h='<div class="detail">';
   if(r.d<0){h+='<p>The cheque date passed '+Math.abs(r.d)+(r.d===-1?' day':' days')+' ago.</p>'}
   else{
@@ -497,7 +511,7 @@ function detailHTML(r){
     var w=new Date(r.day*864e5).getUTCDay();
     if(w===0||w===6){var nw=nextWorking(r.day);h+='<p>This date falls on a weekend. The bank will most likely process it on '+esc(fmtDay(nw,{weekday:'long',day:'numeric',month:'short'}))+'.</p>'}
   }
-  h+='<div class="acts"><button class="btn" data-act="copy" data-key="'+esc(r.key)+'">Copy details</button></div></div>';
+  h+='<div class="acts"><button class="btn" data-act="copy" data-key="'+esc(r.key)+'">Copy details</button>'+fix+'</div></div>';
   return h;
 }
 function rowHTML(r){
@@ -585,10 +599,29 @@ function applyCSV(text,stamp,src){
   var have={};parsed.forEach(function(r){have[r[0]+'-'+r[1]]=1});
   var keep=pendingList().filter(function(x){return x&&x.no&&x.iso&&!have[x.no+'-'+x.iso]&&Date.now()-x.at<864e5});
   LSset('ct-pending',JSON.stringify(keep));
-  keep.forEach(function(x){parsed.push([x.no,x.iso,x.payee,x.amount,x.remarks||''])});
-  state.rows=build(parsed);state.source=src;state.err=null;state.stamp=stamp;
+  var all=parsed.map(function(r){return r.slice()});
+  keep.forEach(function(x){all.push([x.no,x.iso,x.payee,x.amount,x.remarks||''])});
+  state.rows=build(applyOps(all,opsList()));state.source=src;state.err=null;state.stamp=stamp;
   return true;
 }
+function opsList(){try{var o=JSON.parse(LSget('ct-ops')||'[]');return Array.isArray(o)?o.filter(function(x){return x&&x.key&&Date.now()-x.at<18e5}):[]}catch(e){return []}}
+// edits made in the app show at once, and stay applied for 30 minutes while the published link catches up
+function applyOps(raw,ops){
+  ops.forEach(function(op){
+    var out=[];
+    raw.forEach(function(r){
+      if(r[0]+'-'+r[1]!==op.key){out.push(r);return}
+      if(op.t==='del')return;
+      if(op.t==='edit'){out.push([op.to.no,op.to.iso,op.to.payee,op.to.amount,op.to.remarks||'']);return}
+      out.push([r[0],r[1],r[2],r[3],op.t==='cancel'?'Cancelled':'']);
+    });
+    raw=out;
+  });
+  var seen={};
+  return raw.filter(function(r){var k=r[0]+'-'+r[1];if(seen[k])return false;seen[k]=1;return true});
+}
+function rawRows(){return state.rows.map(function(r){return [r.no,r.iso,r.payee,r.amount,r.remarks||'']})}
+function pushOp(op){op.at=Date.now();var l=opsList();l.push(op);LSset('ct-ops',JSON.stringify(l));state.rows=build(applyOps(rawRows(),[op]))}
 var loading=false;
 function load(){
   var url=LSget('ct-csv');
@@ -691,6 +724,12 @@ document.addEventListener('click',function(e){
     LSset('ct-script',u);LSset('ct-secret',sw);scriptStatus();toast('Saved');
   }
   else if(a==='addopen'){openAdd()}
+  else if(a==='editrow'||a==='cancelrow'||a==='restorerow'||a==='delrow'){
+    var row=state.rows.filter(function(r){return r.key===b.getAttribute('data-key')})[0];if(!row)return;
+    if(!scriptConfigured()){toast('Link the add-cheque script in Setup first');var st=$('setup');st.open=true;st.scrollIntoView({behavior:'smooth',block:'start'});return}
+    if(a==='editrow')openAdd(row);else askConfirm(a,row);
+  }
+  else if(a==='confno'){confDlg(false)}
   else if(a==='addcancel'){dlgClose()}
   else if(a==='addsetup'){dlgClose();var sd=$('setup');sd.open=true;sd.scrollIntoView({behavior:'smooth',block:'start'})}
   else if(a==='useamt'){$('fAmt').value=Number(b.getAttribute('data-amt')).toFixed(2);showErrors({});updateAddUI()}
@@ -715,7 +754,7 @@ function checkForm(f){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(f.iso))e.date='Choose the cheque date.';
   if(!f.payee)e.payee='Enter who the cheque is for.';
   if(isNaN(f.amount))e.amount=f.amountRaw?'Enter a number above zero, such as 4,995.00.':'Enter the amount.';
-  if(!e.no&&!e.date){var key=f.no+'-'+f.iso;if(state.rows.some(function(r){return r.key===key}))e.no='Cheque '+f.no+' on that date is already in the list.'}
+  if(!e.no&&!e.date){var key=f.no+'-'+f.iso;if(state.rows.some(function(r){return r.key===key&&(!editing||r.key!==editing.key)}))e.no='Cheque '+f.no+' on that date is already in the list.'}
   return e;
 }
 function showErrors(e){
@@ -742,36 +781,51 @@ function updateAddUI(){
   else if(wd===0||wd===6)lines.push('<span class="m">This falls on a weekend. The bank will likely process it on '+esc(fmtDay(nextWorking(day),{weekday:'long',day:'numeric',month:'short'}))+'.</span>');
   p.innerHTML=lines.join('');
 }
+function savedPayees(){try{var p=JSON.parse(LSget('ct-payees')||'[]');return Array.isArray(p)?p.filter(function(x){return typeof x==='string'&&x}):[]}catch(e){return []}}
+function rememberPayee(name){var l=savedPayees(),k=name.toLowerCase();if(!l.some(function(x){return x.toLowerCase()===k})){l.push(name);LSset('ct-payees',JSON.stringify(l.slice(-300)))}}
 function fillPayees(){
   var seen={},list=[];
   state.rows.slice().sort(function(a,b){return b.day-a.day}).forEach(function(r){var k=r.payee.toLowerCase();if(!seen[k]){seen[k]=1;list.push(r.payee)}});
+  savedPayees().forEach(function(x){var k=x.toLowerCase();if(!seen[k]){seen[k]=1;list.push(x)}});
   $('payees').innerHTML=list.map(function(x){return '<option value="'+esc(x)+'">'}).join('');
 }
 function dlgOpen(){var d=$('addDlg');if(typeof d.showModal==='function'){if(!d.open)d.showModal()}else d.setAttribute('open','')}
 function dlgClose(){var d=$('addDlg');if(typeof d.close==='function'){if(d.open)d.close()}else d.removeAttribute('open')}
-function openAdd(){
+function openAdd(row){
+  editing=row||null;
   $('addForm').reset();showErrors({});$('addErr').textContent='';
+  $('addTitle').textContent=editing?'Edit cheque '+editing.no:'Add a cheque';
+  $('addSub').textContent=editing?'Fix a wrong entry. The sheet row is updated and the alerts follow the new date.':'It is saved to your Cheque Tracker sheet and gets its alerts automatically.';
+  $('addSave').textContent=editing?'Save changes':'Add cheque';
+  if(editing){$('fNo').value=editing.no;$('fDate').value=editing.iso;$('fPayee').value=editing.payee;$('fAmt').value=Number(editing.amount).toFixed(2);$('fRem').value=editing.cancelled?'':editing.remarks||''}
   var ok=scriptConfigured();$('addNeeds').hidden=ok;$('addSave').disabled=!ok;
   fillPayees();updateAddUI();dlgOpen();
   setTimeout(function(){try{$('fNo').focus()}catch(e){}},60);
 }
 function addDone(f){
-  var p=pendingList();p.push({no:f.no,iso:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks,at:Date.now()});LSset('ct-pending',JSON.stringify(p));
-  state.rows=build(state.rows.map(function(r){return [r.no,r.iso,r.payee,r.amount,r.cancelled?'Cancelled':'']}).concat([[f.no,f.iso,f.payee,f.amount,f.remarks]]));
+  rememberPayee(f.payee);
+  if(editing){
+    pushOp({t:'edit',key:editing.key,to:{no:f.no,iso:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks}});
+  }else{
+    LSset('ct-ops',JSON.stringify(opsList().filter(function(o){return !(o.t==='del'&&o.key===f.no+'-'+f.iso)})));
+    var p=pendingList();p.push({no:f.no,iso:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks,at:Date.now()});LSset('ct-pending',JSON.stringify(p));
+    state.rows=build(rawRows().concat([[f.no,f.iso,f.payee,f.amount,f.remarks]]));
+  }
   state.filter=isoToDay(f.iso)>=state.today?'upcoming':'debited';state.month=0;state.q='';
   var q=$('q');if(q)q.value='';
   state.open=f.no+'-'+f.iso;
-  dlgClose();render();toast('Cheque '+f.no+' added to your sheet');
+  var was=editing;editing=null;dlgClose();render();toast(was?'Cheque '+f.no+' updated in your sheet':'Cheque '+f.no+' added to your sheet');
 }
 function addFail(res){
   var m;
-  if(!res)m='Could not reach the add-cheque link. Check the link in Setup, and that the script is deployed with access for Anyone. If you are not sure whether it saved, tap Refresh before adding again. Duplicates are refused.';
+  if(res&&res.error==='not_found')m=res.message;
+  else if(!res)m='Could not reach the add-cheque link. Check the link in Setup, and that the script is deployed with access for Anyone. If you are not sure whether it saved, tap Refresh before adding again. Duplicates are refused.';
   else if(res.error==='bad_secret')m='The secret word does not match the one in the script. Check it in Setup.';
   else if(res.error==='script_not_ready')m='The script still has the placeholder secret word. Set your own word in the script first.';
   else m=res.message||'The sheet could not save this cheque.';
   $('addErr').textContent=m;
 }
-var adding=false;
+var adding=false,editing=null;
 function submitAdd(ev){
   ev.preventDefault();if(adding)return;
   var f=readForm(),e=checkForm(f);showErrors(e);$('addErr').textContent='';
@@ -779,12 +833,43 @@ function submitAdd(ev){
   if(!scriptConfigured()){$('addNeeds').hidden=false;return}
   adding=true;var btn=$('addSave');btn.disabled=true;btn.textContent='Saving...';
   var ctl=typeof AbortController==='function'?new AbortController():null,timer=setTimeout(function(){if(ctl)ctl.abort()},30000);
-  function finish(){clearTimeout(timer);adding=false;btn.textContent='Add cheque';btn.disabled=!scriptConfigured()}
+  function finish(){clearTimeout(timer);adding=false;btn.textContent=editing?'Save changes':'Add cheque';btn.disabled=!scriptConfigured()}
   fetch(LSget('ct-script'),{method:'POST',redirect:'follow',signal:ctl?ctl.signal:undefined,
-    body:JSON.stringify({secret:LSget('ct-secret'),chequeNo:f.no,date:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks})
+    body:JSON.stringify(editing?{secret:LSget('ct-secret'),action:'update',orig:{chequeNo:editing.no,date:editing.iso},chequeNo:f.no,date:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks}
+      :{secret:LSget('ct-secret'),chequeNo:f.no,date:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks})
   }).then(function(r){return r.json()}).then(function(res){
     finish();if(res&&res.ok)addDone(f);else addFail(res||{});
   },function(){finish();addFail(null)});
+}
+
+/* ---------- cancel, restore, delete ---------- */
+var confirmFor=null;
+function confDlg(open){var d=$('confDlg');if(open){if(typeof d.showModal==='function'){if(!d.open)d.showModal()}else d.setAttribute('open','')}else{if(typeof d.close==='function'){if(d.open)d.close()}else d.removeAttribute('open')}}
+function askConfirm(a,row){
+  var amt='AED '+fmtAED(row.amount),what='cheque '+row.no+' to '+row.payee+' ('+amt+')';
+  var T={cancelrow:['Cancel this cheque?','Marks '+what+' as Cancelled in your sheet. It gets no alerts and is left out of every total. You can restore it later.','Cancel cheque'],
+    restorerow:['Restore this cheque?','Removes the Cancelled mark from '+what+'. Alerts start again if its date is still ahead.','Restore cheque'],
+    delrow:['Delete this entry?','Removes '+what+' from your sheet for good. Use this for an entry made by mistake. If the cheque was stopped, choose Cancel instead.','Delete entry']}[a];
+  confirmFor={a:a,row:row};
+  $('confTitle').textContent=T[0];$('confText').textContent=T[1];$('confErr').textContent='';
+  var y=$('confYes');y.textContent=T[2];y.disabled=false;y.classList.toggle('danger',a==='delrow');
+  confDlg(true);
+}
+var confBusy=false;
+function submitConfirm(ev){
+  ev.preventDefault();if(confBusy||!confirmFor)return;
+  var a=confirmFor.a,row=confirmFor.row,y=$('confYes'),label=y.textContent;
+  var action={cancelrow:'cancel',restorerow:'restore',delrow:'delete'}[a],t={cancelrow:'cancel',restorerow:'restore',delrow:'del'}[a];
+  confBusy=true;y.disabled=true;y.textContent='Saving...';
+  var ctl=typeof AbortController==='function'?new AbortController():null,timer=setTimeout(function(){if(ctl)ctl.abort()},30000);
+  function finish(){clearTimeout(timer);confBusy=false;y.disabled=false;y.textContent=label}
+  fetch(LSget('ct-script'),{method:'POST',redirect:'follow',signal:ctl?ctl.signal:undefined,
+    body:JSON.stringify({secret:LSget('ct-secret'),action:action,chequeNo:row.no,date:row.iso})
+  }).then(function(r){return r.json()}).then(function(res){
+    finish();
+    if(res&&res.ok){pushOp({t:t,key:row.key});state.open='';confDlg(false);render();toast({cancelrow:'Cheque cancelled',restorerow:'Cheque restored',delrow:'Entry deleted'}[a])}
+    else{var m=!res?'Could not reach the script. Check the link in Setup.':res.error==='bad_action'?'The script in your sheet is the old version. Paste the new Code.gs, then Deploy, Manage deployments, Edit, New version.':res.error==='bad_secret'?'The secret word does not match the one in the script.':(res.message||'The sheet could not save this change.');$('confErr').textContent=m}
+  },function(){finish();$('confErr').textContent='Could not reach the script. Check the link in Setup.'});
 }
 
 /* ---------- boot ---------- */
@@ -794,6 +879,7 @@ $('scriptUrl').value=LSget('ct-script');
 $('scriptSecret').value=LSget('ct-secret');
 scriptStatus();
 $('addForm').addEventListener('submit',submitAdd);
+$('confForm').addEventListener('submit',submitConfirm);
 $('addForm').addEventListener('input',updateAddUI);
 $('addDlg').addEventListener('click',function(e){if(e.target===$('addDlg'))dlgClose()});
 state.configured=!!LSget('ct-csv');

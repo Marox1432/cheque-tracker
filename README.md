@@ -83,6 +83,17 @@ The **+ Add cheque** button opens a form and writes a new row into your sheet.
 New cheques show in the app at once. Alerts pick them up after the published sheet link refreshes (a few minutes).
 Duplicate cheque numbers on the same date are refused. If you edit the script later, use **Deploy, Manage deployments, Edit, New version**.
 
+### Fix, cancel or delete a cheque
+
+Tap a cheque in the list to open it. Under it you will find:
+
+- **Edit** changes the number, date, payee, amount or remarks and updates the sheet row.
+- **Cancel cheque** marks it Cancelled. It gets no alerts and drops out of the totals. **Restore cheque** undoes it.
+- **Delete** removes a row entered by mistake.
+
+These need the latest `apps-script/Code.gs`. After pasting it, use **Deploy, Manage deployments, Edit, New version, Deploy**.
+The payee list remembers every payee you type, so new ones are suggested next time.
+
 ## Good to know
 
 - Alerts run every day at 08:55 Dubai time. GitHub can start the job a few minutes late.
