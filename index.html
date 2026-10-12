@@ -599,10 +599,11 @@ function load(){
     if(applyCSV(t,stampOf(Date.now()),'live')){LSset('ct-cache',t);LSset('ct-cache-at',String(Date.now()))}
     else{state.err={msg:'The link opened but no cheques were found. Check it is the CSV link for the Cheque Tracker tab.'}}
     loading=false;render();
-  }).catch(function(){
+  }).catch(function(e){
     var c=LSget('ct-cache');
     if(c)applyCSV(c,stampOf(+LSget('ct-cache-at')||Date.now()),'saved');
-    state.err={msg:'Could not reach the sheet'+(c?', showing the last copy':'')};
+    var why=/^HTTP (\d+)/.exec(e&&e.message||'');
+    state.err={msg:(why?'The sheet link answered with error '+why[1]+(why[1]==='404'?'. The link is wrong or no longer published. Publish the tab again and paste the new link in Setup':'. Check the link in Setup'):'Could not reach the sheet. Check the internet connection, the link in Setup, and that no ad blocker is blocking Google')+(c?'. Showing the last copy':'')};
     loading=false;render();
   });
 }
