@@ -178,13 +178,45 @@ summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1.
 .steps{display:grid;gap:12px;margin-top:14px}
 .steps h3{font-size:1rem;margin-top:6px}
 .steps p{margin:0;color:var(--muted);font-size:.88rem}
-.steps input[type=text],.steps textarea{width:100%;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:4px;padding:8px 10px;font-family:var(--f-mono);font-size:.8rem;min-width:0}
+.steps input[type=text],.steps input[type=password],.steps textarea{width:100%;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:4px;padding:8px 10px;font-family:var(--f-mono);font-size:1rem;min-width:0}
 .steps .balrow input{flex:1 1 220px}
 .steps textarea{min-height:5.5em;resize:vertical;overflow-wrap:anywhere}
 .keybox{display:grid;gap:8px}
 .keybox label{font-size:.78rem;color:var(--muted)}
 .keybox .btn{justify-self:start}
 .warn{color:var(--stamp)!important}
+
+/* add-cheque dialog */
+.top-right{display:grid;gap:10px;justify-items:start}
+@media (min-width:640px){.top-right{justify-items:end}}
+.btn.primary.add{padding:9px 18px;font-size:.9rem}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);padding:0;width:min(540px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(8,20,24,.6)}
+dialog form{display:grid;gap:16px;padding:20px 20px 18px}
+.dlg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.dlg-head p{margin:4px 0 0;color:var(--muted);font-size:.85rem}
+.dlg-x{border:1px solid var(--line);background:transparent;border-radius:999px;width:34px;height:34px;font-size:1.2rem;line-height:1;flex:none}
+.dlg-x:hover{border-color:var(--accent)}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.f{display:grid;gap:5px;align-content:start;min-width:0}
+.f.wide{grid-column:1/-1}
+.f label{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.f input{width:100%;min-width:0;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:4px;padding:10px 12px;font-family:var(--f-body);font-size:1rem;line-height:1.3}
+.f input[inputmode=decimal],.f input[inputmode=numeric]{font-family:var(--f-mono)}
+.f input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--wash)}
+.f.bad input{border-color:var(--stamp)}
+.f .err{color:var(--stamp);font-size:.8rem;min-height:0}
+.f .hint{color:var(--muted);font-size:.8rem}
+.f .hint button{border:0;background:transparent;color:var(--accent);font-weight:600;padding:0 0 0 4px;text-decoration:underline}
+.preview{background:var(--wash);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:.86rem;display:grid;gap:3px}
+.preview b{font-weight:600}
+.preview .m{color:var(--muted)}
+.dlg-err{margin:0;color:var(--stamp);font-size:.88rem}
+.dlg-needs{border:1px dashed var(--line);border-radius:6px;padding:12px;display:grid;gap:10px;justify-items:start;font-size:.88rem}
+.dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.dlg-foot .btn{padding:9px 18px;font-size:.9rem}
+.dlg-foot .btn[disabled]{opacity:.55;cursor:default}
+@media (max-width:480px){.fields{grid-template-columns:minmax(0,1fr)}dialog form{padding:16px 16px 14px}}
 </style>
 </head>
 <body>
@@ -195,7 +227,10 @@ summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1.
       <h1>Cheque Tracker</h1>
       <p id="todayline"></p>
     </div>
-    <div class="src" id="src"></div>
+    <div class="top-right">
+      <div class="src" id="src"></div>
+      <button class="btn primary add" data-act="addopen">+ Add cheque</button>
+    </div>
   </header>
 
   <section id="hero" aria-label="Next debit"></section>
@@ -218,7 +253,7 @@ summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1.
   </section>
 
   <section class="sec" aria-labelledby="h-list">
-    <div class="hd"><h2 id="h-list">All cheques</h2><p id="listnote"></p></div>
+    <div class="hd"><h2 id="h-list">All cheques</h2><p id="listnote"></p><button class="btn" data-act="addopen">+ Add cheque</button></div>
     <div class="tools">
       <div class="tabs" id="tabs"></div>
       <div class="search"><input id="q" type="search" placeholder="Search payee or cheque no." aria-label="Search cheques" autocomplete="off"></div>
@@ -265,6 +300,19 @@ summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1.
           <textarea id="subtext" readonly></textarea>
           <button class="btn" data-act="copyfield" data-target="subtext">Copy device line</button>
         </div>
+
+        <h3>3. Add cheques from the app</h3>
+        <p id="scriptstate"></p>
+        <p>Set up the Google Apps Script once (steps are in the README), then paste its web app link and your secret word here. This stays on this device.</p>
+        <div class="keybox">
+          <label for="scriptUrl">Web app link</label>
+          <input id="scriptUrl" type="text" inputmode="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+          <label for="scriptSecret">Secret word</label>
+          <input id="scriptSecret" type="password" placeholder="The same word you set in the script" autocomplete="off">
+        </div>
+        <div class="acts" style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="btn primary" data-act="savescript">Save</button>
+        </div>
       </div>
     </details>
   </section>
@@ -273,6 +321,34 @@ summary{cursor:pointer;font-family:var(--f-display);font-weight:700;font-size:1.
     <span>Dates follow the cheque date. UAE weekend is Saturday and Sunday.</span>
   </footer>
 </div>
+<dialog id="addDlg" aria-labelledby="addTitle">
+  <form id="addForm" novalidate>
+    <div class="dlg-head">
+      <div>
+        <h2 id="addTitle">Add a cheque</h2>
+        <p>It is saved to your Cheque Tracker sheet and gets its alerts automatically.</p>
+      </div>
+      <button type="button" class="dlg-x" data-act="addcancel" aria-label="Close">&times;</button>
+    </div>
+    <div class="dlg-needs" id="addNeeds" hidden>
+      <span>The app is not linked to the add-cheque script yet. Link it once in Setup, under "3. Add cheques from the app".</span>
+      <button type="button" class="btn primary" data-act="addsetup">Open setup</button>
+    </div>
+    <div class="fields">
+      <div class="f" id="gNo"><label for="fNo">Cheque number</label><input id="fNo" inputmode="numeric" autocomplete="off" maxlength="20" placeholder="e.g. 250"><small class="err" id="eNo"></small></div>
+      <div class="f" id="gDate"><label for="fDate">Cheque date</label><input id="fDate" type="date"><small class="err" id="eDate"></small></div>
+      <div class="f wide" id="gPayee"><label for="fPayee">Payee</label><input id="fPayee" list="payees" autocomplete="off" maxlength="120" placeholder="Start typing to pick a payee you have used"><datalist id="payees"></datalist><small class="hint" id="hPayee"></small><small class="err" id="ePayee"></small></div>
+      <div class="f" id="gAmt"><label for="fAmt">Amount (AED)</label><input id="fAmt" inputmode="decimal" autocomplete="off" placeholder="0.00"><small class="err" id="eAmt"></small></div>
+      <div class="f" id="gRem"><label for="fRem">Remarks (optional)</label><input id="fRem" autocomplete="off" maxlength="200"></div>
+    </div>
+    <div class="preview" id="addPreview" aria-live="polite"></div>
+    <p class="dlg-err" id="addErr" role="alert"></p>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-act="addcancel">Cancel</button>
+      <button type="submit" class="btn primary" id="addSave">Add cheque</button>
+    </div>
+  </form>
+</dialog>
 <div class="live-msg" id="toast" role="status" hidden></div>
 <script>
 (function(){
@@ -505,6 +581,11 @@ function parseCSV(t){
 function applyCSV(text,stamp,src){
   var parsed=parseValues(parseCSV(text));
   if(!parsed.length)return false;
+  // cheques added from this app show at once; they drop out here when the published sheet catches up
+  var have={};parsed.forEach(function(r){have[r[0]+'-'+r[1]]=1});
+  var keep=pendingList().filter(function(x){return x&&x.no&&x.iso&&!have[x.no+'-'+x.iso]&&Date.now()-x.at<864e5});
+  LSset('ct-pending',JSON.stringify(keep));
+  keep.forEach(function(x){parsed.push([x.no,x.iso,x.payee,x.amount,x.remarks||''])});
   state.rows=build(parsed);state.source=src;state.err=null;state.stamp=stamp;
   return true;
 }
@@ -602,11 +683,118 @@ document.addEventListener('click',function(e){
   else if(a==='subscribe'){subscribe()}
   else if(a==='testnote'){testNote()}
   else if(a==='copyfield'){var el=$(b.getAttribute('data-target'));if(el)copyText(el.value)}
+  else if(a==='savescript'){
+    var u=$('scriptUrl').value.trim(),sw=$('scriptSecret').value.trim();
+    if(!/^https:\/\/script\.google\.com\/(a\/macros\/[^\/\s]+|macros)\/s\/[^\s]+\/exec$/.test(u)){toast('Paste the full web app link, ending in /exec');return}
+    if(sw.length<8){toast('The secret word needs at least 8 characters');return}
+    LSset('ct-script',u);LSset('ct-secret',sw);scriptStatus();toast('Saved');
+  }
+  else if(a==='addopen'){openAdd()}
+  else if(a==='addcancel'){dlgClose()}
+  else if(a==='addsetup'){dlgClose();var sd=$('setup');sd.open=true;sd.scrollIntoView({behavior:'smooth',block:'start'})}
+  else if(a==='useamt'){$('fAmt').value=Number(b.getAttribute('data-amt')).toFixed(2);showErrors({});updateAddUI()}
 });
+
+/* ---------- add a cheque ---------- */
+function pendingList(){try{var p=JSON.parse(LSget('ct-pending')||'[]');return Array.isArray(p)?p:[]}catch(e){return []}}
+function scriptConfigured(){return !!(LSget('ct-script')&&LSget('ct-secret'))}
+function scriptStatus(){$('scriptstate').textContent=scriptConfigured()?'Connected. The Add cheque button saves straight to your sheet.':'Not connected yet. The Add cheque button needs this first.'}
+function parseAmount(s){
+  var t=String(s||'').replace(/[\s,]/g,'');
+  if(!/^\d+(\.\d{1,2})?$/.test(t))return NaN;
+  var n=parseFloat(t);return n>0&&n<=1e9?n:NaN;
+}
+function readForm(){
+  return {no:$('fNo').value.trim(),iso:$('fDate').value,payee:$('fPayee').value.replace(/\s+/g,' ').trim(),
+    amount:parseAmount($('fAmt').value),amountRaw:$('fAmt').value.trim(),remarks:$('fRem').value.replace(/\s+/g,' ').trim()};
+}
+function checkForm(f){
+  var e={};
+  if(!/^[0-9A-Za-z\-]{1,20}$/.test(f.no))e.no='Enter the cheque number, using letters, numbers or dashes.';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(f.iso))e.date='Choose the cheque date.';
+  if(!f.payee)e.payee='Enter who the cheque is for.';
+  if(isNaN(f.amount))e.amount=f.amountRaw?'Enter a number above zero, such as 4,995.00.':'Enter the amount.';
+  if(!e.no&&!e.date){var key=f.no+'-'+f.iso;if(state.rows.some(function(r){return r.key===key}))e.no='Cheque '+f.no+' on that date is already in the list.'}
+  return e;
+}
+function showErrors(e){
+  [['no','No'],['date','Date'],['payee','Payee'],['amount','Amt']].forEach(function(p){
+    $('e'+p[1]).textContent=e[p[0]]||'';
+    $('g'+p[1]).classList.toggle('bad',!!e[p[0]]);
+  });
+}
+function lastForPayee(name){
+  var n=name.toLowerCase(),best=null;
+  state.rows.forEach(function(r){if(r.payee.toLowerCase()===n&&!r.cancelled&&(!best||r.day>best.day))best=r});
+  return best;
+}
+function updateAddUI(){
+  var f=readForm(),h='',last=f.payee?lastForPayee(f.payee):null;
+  if(last)h='Last cheque to this payee: AED '+fmtAED(last.amount)+' on '+esc(fmtDay(last.day,{day:'numeric',month:'short',year:'numeric'}))+'.<button type="button" data-act="useamt" data-amt="'+last.amount+'">Use this amount</button>';
+  $('hPayee').innerHTML=h;
+  var p=$('addPreview');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(f.iso)){p.innerHTML='<span class="m">Pick the cheque date to see when your alerts will arrive.</span>';return}
+  var day=isoToDay(f.iso),d=day-state.today,wd=new Date(day*864e5).getUTCDay(),lines=[];
+  function al(k){var a=day-k,dd=a-state.today;return '<span><b>'+k+'-day alert</b> '+esc(fmtDay(a,{weekday:'short',day:'numeric',month:'short'}))+' <span class="m">'+(dd<0?'(already passed)':dd===0?'(today)':'(in '+dd+(dd===1?' day':' days')+')')+'</span></span>'}
+  lines.push(al(5),al(1));
+  if(d<0)lines.unshift('<span class="m">This date has passed, so the cheque will show as Debited.</span>');
+  else if(wd===0||wd===6)lines.push('<span class="m">This falls on a weekend. The bank will likely process it on '+esc(fmtDay(nextWorking(day),{weekday:'long',day:'numeric',month:'short'}))+'.</span>');
+  p.innerHTML=lines.join('');
+}
+function fillPayees(){
+  var seen={},list=[];
+  state.rows.slice().sort(function(a,b){return b.day-a.day}).forEach(function(r){var k=r.payee.toLowerCase();if(!seen[k]){seen[k]=1;list.push(r.payee)}});
+  $('payees').innerHTML=list.map(function(x){return '<option value="'+esc(x)+'">'}).join('');
+}
+function dlgOpen(){var d=$('addDlg');if(typeof d.showModal==='function'){if(!d.open)d.showModal()}else d.setAttribute('open','')}
+function dlgClose(){var d=$('addDlg');if(typeof d.close==='function'){if(d.open)d.close()}else d.removeAttribute('open')}
+function openAdd(){
+  $('addForm').reset();showErrors({});$('addErr').textContent='';
+  var ok=scriptConfigured();$('addNeeds').hidden=ok;$('addSave').disabled=!ok;
+  fillPayees();updateAddUI();dlgOpen();
+  setTimeout(function(){try{$('fNo').focus()}catch(e){}},60);
+}
+function addDone(f){
+  var p=pendingList();p.push({no:f.no,iso:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks,at:Date.now()});LSset('ct-pending',JSON.stringify(p));
+  state.rows=build(state.rows.map(function(r){return [r.no,r.iso,r.payee,r.amount,r.cancelled?'Cancelled':'']}).concat([[f.no,f.iso,f.payee,f.amount,f.remarks]]));
+  state.filter=isoToDay(f.iso)>=state.today?'upcoming':'debited';state.month=0;state.q='';
+  var q=$('q');if(q)q.value='';
+  state.open=f.no+'-'+f.iso;
+  dlgClose();render();toast('Cheque '+f.no+' added to your sheet');
+}
+function addFail(res){
+  var m;
+  if(!res)m='Could not reach the add-cheque link. Check the link in Setup, and that the script is deployed with access for Anyone. If you are not sure whether it saved, tap Refresh before adding again. Duplicates are refused.';
+  else if(res.error==='bad_secret')m='The secret word does not match the one in the script. Check it in Setup.';
+  else if(res.error==='script_not_ready')m='The script still has the placeholder secret word. Set your own word in the script first.';
+  else m=res.message||'The sheet could not save this cheque.';
+  $('addErr').textContent=m;
+}
+var adding=false;
+function submitAdd(ev){
+  ev.preventDefault();if(adding)return;
+  var f=readForm(),e=checkForm(f);showErrors(e);$('addErr').textContent='';
+  if(Object.keys(e).length){try{$(e.no?'fNo':e.date?'fDate':e.payee?'fPayee':'fAmt').focus()}catch(x){}return}
+  if(!scriptConfigured()){$('addNeeds').hidden=false;return}
+  adding=true;var btn=$('addSave');btn.disabled=true;btn.textContent='Saving...';
+  var ctl=typeof AbortController==='function'?new AbortController():null,timer=setTimeout(function(){if(ctl)ctl.abort()},30000);
+  function finish(){clearTimeout(timer);adding=false;btn.textContent='Add cheque';btn.disabled=!scriptConfigured()}
+  fetch(LSget('ct-script'),{method:'POST',redirect:'follow',signal:ctl?ctl.signal:undefined,
+    body:JSON.stringify({secret:LSget('ct-secret'),chequeNo:f.no,date:f.iso,payee:f.payee,amount:f.amount,remarks:f.remarks})
+  }).then(function(r){return r.json()}).then(function(res){
+    finish();if(res&&res.ok)addDone(f);else addFail(res||{});
+  },function(){finish();addFail(null)});
+}
 
 /* ---------- boot ---------- */
 $('csv').value=LSget('ct-csv');
 $('pubfield').value=LSget('ct-pub');
+$('scriptUrl').value=LSget('ct-script');
+$('scriptSecret').value=LSget('ct-secret');
+scriptStatus();
+$('addForm').addEventListener('submit',submitAdd);
+$('addForm').addEventListener('input',updateAddUI);
+$('addDlg').addEventListener('click',function(e){if(e.target===$('addDlg'))dlgClose()});
 state.configured=!!LSget('ct-csv');
 render();
 load();

@@ -71,6 +71,18 @@ The alert job can also send each alert to your WhatsApp, using the free CallMeBo
 The message contains payee names and amounts, and it passes through the CallMeBot service.
 If you only want WhatsApp, you can leave out `PUSH_SUBSCRIPTIONS`.
 
+## 7. Add cheques from the app (optional)
+
+The **+ Add cheque** button opens a form and writes a new row into your sheet.
+
+1. Open your Google Sheet, then **Extensions, Apps Script**.
+2. Delete everything in `Code.gs`, paste the contents of `apps-script/Code.gs` from this repository, and change `CHANGE-ME` to a secret word of your own (8+ characters). Save.
+3. **Deploy, New deployment**, type **Web app**. Execute as **Me**, Who has access **Anyone**. Deploy and allow the permissions. Copy the **Web app URL** (ends in `/exec`).
+4. In the app open **Setup and alerts, 3. Add cheques from the app**, paste the URL and the same secret word, and tap **Save**. Do this on each device.
+
+New cheques show in the app at once. Alerts pick them up after the published sheet link refreshes (a few minutes).
+Duplicate cheque numbers on the same date are refused. If you edit the script later, use **Deploy, Manage deployments, Edit, New version**.
+
 ## Good to know
 
 - Alerts run every day at 08:55 Dubai time. GitHub can start the job a few minutes late.
