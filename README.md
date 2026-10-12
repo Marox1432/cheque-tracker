@@ -50,6 +50,27 @@ In **Setup and alerts** paste the sheet link, **paste the same public key** into
 (do not create new keys), and tap **Turn on notifications here**. Copy the device line and add it as a
 **new line** under the existing text in the `PUSH_SUBSCRIPTIONS` secret. One device per line.
 
+## WhatsApp messages (optional)
+
+The alert job can also send each alert to your WhatsApp, using the free CallMeBot service
+(for personal use, unofficial, no guarantees).
+
+1. Save the number **+34 644 94 58 67** in your phone contacts.
+2. From WhatsApp send it this exact message: `I allow callmebot to send me messages`
+3. It replies with "API Activated ... Your APIKEY is 123456". If nothing arrives within two minutes,
+   try again after 24 hours.
+4. In the repository add a secret named `WHATSAPP_RECIPIENTS` with one line in this form
+   (your number with country code, a colon, then your key):
+
+   `+971501234567:123456`
+
+   To message more than one person, put one line per person. Each person must activate CallMeBot
+   from their own WhatsApp first.
+5. Run **Cheque alerts** with "Send a test notification" ticked. The test now sends to WhatsApp too.
+
+The message contains payee names and amounts, and it passes through the CallMeBot service.
+If you only want WhatsApp, you can leave out `PUSH_SUBSCRIPTIONS`.
+
 ## Good to know
 
 - Alerts run every day at 08:55 Dubai time. GitHub can start the job a few minutes late.

@@ -69,8 +69,33 @@ export function buildAlerts(cheques, today) {
   return { title, body: lines.join('\n') + `\nTotal AED ${fmtAED(total)}`, tag: 'cheque-' + today, count: hits.length };
 }
 
+// WHATSAPP_RECIPIENTS: one recipient per line, written phone:apikey, for example +971501234567:1234567
+// (CallMeBot, https://www.callmebot.com/blog/free-api-whatsapp-messages/). The phone number and key are
+// secrets, so this code never prints them or the request address.
+export function parseRecipients(text) {
+  return String(text || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    const i = l.lastIndexOf(':');
+    return i > 0 ? { phone: l.slice(0, i).replace(/\s+/g, ''), apikey: l.slice(i + 1).trim() } : null;
+  }).filter((r) => r && r.phone && r.apikey);
+}
+
+export async function sendWhatsApp(recipients, text, doFetch = fetch) {
+  let ok = 0;
+  for (const [i, r] of recipients.entries()) {
+    try {
+      const q = new URLSearchParams({ phone: r.phone, text, apikey: r.apikey });
+      const res = await doFetch('https://api.callmebot.com/whatsapp.php?' + q.toString());
+      if (res.ok) ok++;
+      else console.log(`WhatsApp recipient ${i + 1} failed (status ${res.status}).`);
+    } catch {
+      console.log(`WhatsApp recipient ${i + 1} failed (could not reach the WhatsApp service).`);
+    }
+  }
+  return ok;
+}
+
 async function main() {
-  const { SHEET_CSV_URL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_SUBSCRIPTIONS, VAPID_SUBJECT, TEST_ONLY, DRY_RUN } = process.env;
+  const { SHEET_CSV_URL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, PUSH_SUBSCRIPTIONS, VAPID_SUBJECT, WHATSAPP_RECIPIENTS, TEST_ONLY, DRY_RUN } = process.env;
   if (!SHEET_CSV_URL) throw new Error('Missing secret SHEET_CSV_URL');
 
   let payload;
@@ -87,24 +112,35 @@ async function main() {
   }
 
   if (DRY_RUN === 'true') { console.log(payload.title + '\n' + payload.body); return; }
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Missing VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY');
-  const subs = (PUSH_SUBSCRIPTIONS || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => JSON.parse(l));
-  if (!subs.length) throw new Error('Missing secret PUSH_SUBSCRIPTIONS (one device line per row)');
 
-  webpush.setVapidDetails(VAPID_SUBJECT || 'mailto:alerts@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  let sent = 0, failed = 0;
-  for (const [i, sub] of subs.entries()) {
-    try {
-      await webpush.sendNotification(sub, JSON.stringify({ title: payload.title, body: payload.body, tag: payload.tag }), { TTL: 60 * 60 * 12, urgency: 'high' });
-      sent++;
-    } catch (err) {
-      failed++;
-      console.log(`Device ${i + 1} failed (status ${err.statusCode || 'unknown'}).` +
-        (err.statusCode === 404 || err.statusCode === 410 ? ' This device subscription expired: turn notifications on again in the app and update PUSH_SUBSCRIPTIONS.' : ''));
-    }
+  // --- WhatsApp (optional): used only when the WHATSAPP_RECIPIENTS secret exists ---
+  const wa = parseRecipients(WHATSAPP_RECIPIENTS);
+  let waSent = 0;
+  if (wa.length) {
+    waSent = await sendWhatsApp(wa, `*${payload.title}*\n${payload.body}`);
+    console.log(`WhatsApp message sent to ${waSent} of ${wa.length} recipient(s).`);
   }
-  console.log(`Alert for ${payload.count} cheque(s) sent to ${sent} of ${subs.length} device(s).`);
-  if (sent === 0) process.exit(1);
+
+  // --- Phone and laptop notifications (optional when WhatsApp is set up) ---
+  const subs = (PUSH_SUBSCRIPTIONS || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => JSON.parse(l));
+  let sent = 0;
+  if (subs.length) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) throw new Error('Missing VAPID_PUBLIC_KEY or VAPID_PRIVATE_KEY');
+    webpush.setVapidDetails(VAPID_SUBJECT || 'mailto:alerts@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    for (const [i, sub] of subs.entries()) {
+      try {
+        await webpush.sendNotification(sub, JSON.stringify({ title: payload.title, body: payload.body, tag: payload.tag }), { TTL: 60 * 60 * 12, urgency: 'high' });
+        sent++;
+      } catch (err) {
+        console.log(`Device ${i + 1} failed (status ${err.statusCode || 'unknown'}).` +
+          (err.statusCode === 404 || err.statusCode === 410 ? ' This device subscription expired: turn notifications on again in the app and update PUSH_SUBSCRIPTIONS.' : ''));
+      }
+    }
+    console.log(`Alert for ${payload.count} cheque(s) sent to ${sent} of ${subs.length} device(s).`);
+  } else if (!wa.length) {
+    throw new Error('Nothing to send to. Add PUSH_SUBSCRIPTIONS and/or WHATSAPP_RECIPIENTS.');
+  }
+  if (sent === 0 && waSent === 0) process.exit(1);
 }
 
 import { fileURLToPath } from 'node:url';
